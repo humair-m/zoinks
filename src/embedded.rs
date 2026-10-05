@@ -34,6 +34,11 @@ const FFMPEG_BYTES: &[u8] = include_bytes!("../bundled/ffmpeg");
 pub fn extract_embedded_yt_dlp() -> Option<PathBuf> {
     #[cfg(feature = "bundled")]
     {
+        // Skip if the embedded bytes are empty (e.g., the build.rs wrote an
+        // empty placeholder because there's no static build for this platform).
+        if YT_DLP_BYTES.is_empty() {
+            return None;
+        }
         let bin_name = if cfg!(target_os = "windows") {
             "yt-dlp.exe"
         } else {
@@ -76,6 +81,11 @@ pub fn extract_embedded_yt_dlp() -> Option<PathBuf> {
 pub fn extract_embedded_ffmpeg() -> Option<PathBuf> {
     #[cfg(feature = "bundled")]
     {
+        // Skip if empty (macOS case — no static build available, build.rs
+        // wrote an empty placeholder).
+        if FFMPEG_BYTES.is_empty() {
+            return None;
+        }
         let bin_name = if cfg!(target_os = "windows") {
             "ffmpeg.exe"
         } else {

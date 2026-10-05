@@ -34,22 +34,25 @@ fn yt_dlp_asset() -> &'static str {
     }
 }
 
-fn ffmpeg_url() -> String {
+fn ffmpeg_url() -> Option<String> {
+    // yt-dlp/FFmpeg-Builds only ships Linux + Windows binaries — no macOS builds.
+    // For macOS we fall back to the system Homebrew ffmpeg (or any ffmpeg on PATH)
+    // at runtime, so we don't embed anything at build time.
     let arch = match env::consts::ARCH {
         "x86_64" => "64",
         "aarch64" => "arm64",
         _ => "64",
     };
-    let os = match env::consts::OS {
-        "linux" => "linux",
-        "macos" => "macos",
-        "windows" => "win",
-        _ => "linux",
-    };
-    format!(
-        "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-{}{}-gpl.tar.xz",
-        os, arch
-    )
+    match env::consts::OS {
+        "linux" => Some(format!(
+            "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux{}-gpl.tar.xz",
+            arch
+        )),
+        "windows" => Some(format!(
+            "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        )),
+        _ => None, // macOS: no static build available — fall back to system ffmpeg
+    }
 }
 
 fn main() {
@@ -88,13 +91,30 @@ fn main() {
     }
 
     if !ffmpeg_path.exists() {
-        if env::var("ZOINKS_SKIP_BUNDLED_DOWNLOAD").is_ok() {
-            panic!(
-                "bundled/ffmpeg is missing and ZOINKS_SKIP_BUNDLED_DOWNLOAD is set.\n\
-                 Run `scripts/fetch-bundled-binaries.sh` to download it manually."
-            );
+        match ffmpeg_url() {
+            Some(url) => {
+                if env::var("ZOINKS_SKIP_BUNDLED_DOWNLOAD").is_ok() {
+                    panic!(
+                        "bundled/ffmpeg is missing and ZOINKS_SKIP_BUNDLED_DOWNLOAD is set.\n\
+                         Run `scripts/fetch-bundled-binaries.sh` to download it manually."
+                    );
+                }
+                download_ffmpeg(&ffmpeg_path, &url);
+            }
+            None => {
+                // macOS: no static ffmpeg build available from yt-dlp/FFmpeg-Builds.
+                // Don't embed anything — the runtime will fall back to system ffmpeg
+                // (Homebrew: `brew install ffmpeg`).
+                println!(
+                    "cargo:warning=bundled/ffmpeg not embedded on this platform (macOS has no \
+                     static build). The zoinks binary will use whatever ffmpeg is on PATH at \
+                     runtime. Install via `brew install ffmpeg` for full functionality."
+                );
+                // Create an empty placeholder so embedded.rs doesn't fail to compile.
+                // The runtime checks file size before extracting — 0 bytes means "skip".
+                let _ = fs::write(&ffmpeg_path, b"");
+            }
         }
-        download_ffmpeg(&ffmpeg_path);
     }
 
     // Sanity-check: files exist and are non-empty
@@ -196,14 +216,21 @@ fn download_yt_dlp(dest: &std::path::Path) {
     eprintln!("build.rs: yt-dlp downloaded ({:?})", asset);
 }
 
-fn download_ffmpeg(dest: &std::path::Path) {
-    let url = ffmpeg_url();
+fn download_ffmpeg(dest: &std::path::Path, url: &str) {
     eprintln!("build.rs: downloading ffmpeg from {} to {}...", url, dest.display());
-    let tmp_xz = dest.with_extension("tar.xz");
+
+    // Windows ships as .zip, Linux as .tar.xz
+    let is_zip = url.ends_with(".zip");
+    let tmp_archive = if is_zip {
+        dest.with_extension("zip")
+    } else {
+        dest.with_extension("tar.xz")
+    };
+
     let rc = Command::new("curl")
         .args(["-sL", "-o"])
-        .arg(&tmp_xz)
-        .arg(&url)
+        .arg(&tmp_archive)
+        .arg(url)
         .status()
         .expect("curl is required to fetch ffmpeg");
     if !rc.success() {
@@ -214,60 +241,104 @@ fn download_ffmpeg(dest: &std::path::Path) {
             rc.code()
         );
     }
-    // verify it's actually an xz file (not a 404 HTML page)
-    let mut header = [0u8; 6];
-    if let Ok(mut f) = fs::File::open(&tmp_xz) {
-        let _ = f.read_exact(&mut header);
+
+    if is_zip {
+        // Windows: extract via unzip or PowerShell
+        let rc = Command::new("unzip")
+            .args(["-q", "-o"])
+            .arg(&tmp_archive)
+            .arg("-d")
+            .arg(dest.parent().unwrap())
+            .status();
+        let ok = rc.map(|s| s.success()).unwrap_or(false);
+        if !ok {
+            // Fall back to PowerShell's Expand-Archive
+            let ps_rc = Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-Command",
+                    &format!(
+                        "Expand-Archive -Force -Path '{}' -DestinationPath '{}'",
+                        tmp_archive.display(),
+                        dest.parent().unwrap().display()
+                    ),
+                ])
+                .status();
+            if !ps_rc.map(|s| s.success()).unwrap_or(false) {
+                panic!(
+                    "build.rs: failed to extract ffmpeg zip (tried unzip and PowerShell)"
+                );
+            }
+        }
+    } else {
+        // Linux: tar.xz
+        // verify it's actually an xz file (not a 404 HTML page)
+        let mut header = [0u8; 6];
+        if let Ok(mut f) = fs::File::open(&tmp_archive) {
+            let _ = f.read_exact(&mut header);
+        }
+        // XZ magic: 0xFD '7zXZ'
+        if header[0] != 0xFD || &header[1..4] != b"7zX" {
+            let _ = fs::remove_file(&tmp_archive);
+            panic!(
+                "build.rs: downloaded ffmpeg archive is not a valid XZ file (got header {:?}).\n\
+                 The release URL may have moved — check {}",
+                header,
+                url
+            );
+        }
+        let rc = Command::new("tar")
+            .args(["xf"])
+            .arg(&tmp_archive)
+            .current_dir(dest.parent().unwrap())
+            .status()
+            .expect("tar is required to extract ffmpeg");
+        if !rc.success() {
+            panic!("build.rs: failed to extract ffmpeg.tar.xz");
+        }
     }
-    // XZ magic: 0xFD '7zXZ'
-    if header[0] != 0xFD || &header[1..4] != b"7zX" {
-        let _ = fs::remove_file(&tmp_xz);
-        panic!(
-            "build.rs: downloaded ffmpeg.tar.xz is not a valid XZ archive (got header {:?}).\n\
-             The release URL may have moved — check {}",
-            header,
-            url
-        );
-    }
-    let rc = Command::new("tar")
-        .args(["xf"])
-        .arg(&tmp_xz)
-        .current_dir(dest.parent().unwrap())
-        .status()
-        .expect("tar is required to extract ffmpeg");
-    if !rc.success() {
-        panic!("build.rs: failed to extract ffmpeg.tar.xz");
-    }
-    // The tarball extracts to ffmpeg-master-latest-<platform>-gpl/bin/ffmpeg
+
+    // The archive extracts to ffmpeg-master-latest-<platform>-gpl/bin/ffmpeg
     // (or ffmpeg.exe on Windows). Find it via glob.
     let parent = dest.parent().unwrap();
     let mut extracted: Option<PathBuf> = None;
+    let ffmpeg_name = if cfg!(target_os = "windows") { "ffmpeg.exe" } else { "ffmpeg" };
     if let Ok(entries) = fs::read_dir(parent) {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            if name_str.starts_with("ffmpeg-master-latest-") && name_str.ends_with("-gpl") {
-                let ffmpeg_name = if cfg!(target_os = "windows") { "ffmpeg.exe" } else { "ffmpeg" };
+            // Match ffmpeg-master-latest-* directories
+            if name_str.starts_with("ffmpeg-master-latest-") || name_str.starts_with("ffmpeg-master-") {
                 let candidate = entry.path().join("bin").join(ffmpeg_name);
                 if candidate.exists() {
                     extracted = Some(candidate);
                     break;
                 }
+                // Some builds have a different layout
+                let candidate2 = entry.path().join("bin").join(ffmpeg_name);
+                if candidate2.exists() {
+                    extracted = Some(candidate2);
+                    break;
+                }
             }
         }
     }
-    let extracted = extracted.expect(
-        "build.rs: couldn't find ffmpeg inside the extracted tarball — \
-         check that the URL returned a valid ffmpeg-master-latest-* tarball"
-    );
+    let extracted = extracted.unwrap_or_else(|| {
+        panic!(
+            "build.rs: couldn't find {} inside the extracted archive — \
+             check that the URL returned a valid ffmpeg-master-latest-* archive",
+            ffmpeg_name
+        )
+    });
     fs::rename(&extracted, dest).expect("failed to move ffmpeg into place");
-    // Clean up the extracted directory and the tarball
-    let _ = fs::remove_file(&tmp_xz);
+
+    // Clean up the archive and extracted directory
+    let _ = fs::remove_file(&tmp_archive);
     if let Ok(entries) = fs::read_dir(parent) {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            if name_str.starts_with("ffmpeg-master-latest-") && name_str.ends_with("-gpl") {
+            if name_str.starts_with("ffmpeg-master-latest-") || name_str.starts_with("ffmpeg-master-") {
                 let _ = fs::remove_dir_all(entry.path());
             }
         }
