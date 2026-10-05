@@ -1,0 +1,141 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  # Build & upload the Python wheels for every supported platform / arch.
+  # maturin handles the cross-compilation matrix internally via the
+  # PyO3 abi3-py38 feature — one wheel per platform covers Python 3.8-3.13.
+  python-wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - macos-13        # Intel
+          - macos-14        # Apple Silicon
+          - windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheel
+        run: maturin build --release --out dist
+        shell: bash
+
+      - name: Build musllinux wheel (Linux only)
+        if: runner.os == 'Linux'
+        run: maturin build --release --interpreter python3.12 --target x86_64-unknown-linux-musl --out dist || true
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  # Build the standalone Rust TUI binary for every platform.
+  rust-binaries:
+    name: Build zoinks-tui on ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact: zoinks-tui-x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            artifact: zoinks-tui-aarch64-unknown-linux-gnu
+            cross: true
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: zoinks-tui-x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+            artifact: zoinks-tui-aarch64-apple-darwin
+          - os: windows-2022
+            target: x86_64-pc-windows-gnu
+            artifact: zoinks-tui-x86_64-pc-windows-gnu.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross
+
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --no-default-features --bin zoinks-tui --target ${{ matrix.target }}
+          else
+            cargo build --release --no-default-features --bin zoinks-tui --target ${{ matrix.target }}
+          fi
+        shell: bash
+
+      - name: Rename artifact
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/zoinks-tui${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }} dist/${{ matrix.artifact }}
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  # Run cargo test on Linux to make sure nothing regressed.
+  rust-tests:
+    name: Rust tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --no-default-features --lib
+
+  # Publish everything to the GitHub release on tag.
+  release:
+    name: Publish to GitHub Releases
+    needs: [python-wheels, rust-binaries, rust-tests]
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/zoinks-tui-*
+            dist/zoinks-*.whl
+          generate_release_notes: true
+          fail_on_unmatched_files: true

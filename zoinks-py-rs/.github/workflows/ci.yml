@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    name: Rust lib tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --no-default-features --lib
+      - run: cargo build --no-default-features --bin zoinks-tui
+
+  python:
+    name: Python wheel build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pip install maturin textual pytest ruff
+      - run: maturin build --release --out dist
+      - run: pip install zoinks --no-index --find-links dist
+      - run: zoinks --version
+      - run: zoinks --help
+      - run: pytest tests/
+      - run: ruff check python/zoinks/

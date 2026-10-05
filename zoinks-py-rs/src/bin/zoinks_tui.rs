@@ -72,9 +72,10 @@ fn main() -> ExitCode {
 
     let url = parsed.initial_url.as_deref();
     let cookies = parsed.cookies.as_deref().map(Path::new);
-    match app::run_with_cookies(url, &theme_mode, cookies) {
+    let cookies_from_browser = parsed.cookies_from_browser.as_deref();
+    match app::run_with_cookies(url, &theme_mode, cookies, cookies_from_browser) {
         Ok(Some(filepath)) => {
-            println!("✓ yoinked → {filepath}");
+            println!("✓ zoinked → {filepath}");
             ExitCode::SUCCESS
         }
         Ok(None) => ExitCode::SUCCESS,

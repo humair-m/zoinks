@@ -19,6 +19,7 @@
 
 pub mod args;
 pub mod clipboard;
+pub mod embedded;
 pub mod format;
 pub mod history;
 pub mod platforms;

@@ -5,7 +5,7 @@
   <img src="assets/logo-light.svg" alt="zoinks" width="288">
 </picture>
 
-**yoink any video. paste. yoink. done.**
+**zoink any video. paste. zoink. done.**
 
 A Python + Rust port of [Pablo Stanley's `yoinks`](https://github.com/pablostanley/yoinks) — the terminal video downloader that wraps [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) and gives you a clean, full-screen picker for YouTube, X/Twitter, Instagram, Threads, TikTok and 1,800+ other sites.
 
@@ -16,7 +16,7 @@ This fork keeps the original UX (paste, pick a resolution or audio-only mp3, yoi
 
 Both surfaces share the same Rust crate, so behaviour stays in lock-step: the same `probe` / `build_choices` / `download` calls underlie the Rust binary, the Python CLI, and any third-party Python code that imports `zoinks`.
 
-<img src="assets/home.png" alt="zoinks home screen — paste a link and hit yoink" width="100%">
+<img src="assets/home.png" alt="zoinks home screen — paste a link and hit zoink" width="100%">
 
 ---
 
@@ -62,8 +62,7 @@ This repo's [releases page](https://github.com/humair-m/zoinks/releases) ships:
 
 * **Python 3.8+** for the Python package (PyO3 builds with `abi3-py38`, so a single wheel works on every CPython 3.8+).
 * **Rust 1.74+** only if you're building from source.
-* **yt-dlp** — fetched automatically on first run to `~/.zoinks/bin`. If you already have it on your PATH, that copy is used.
-* **ffmpeg** — used for merging high-res streams and mp3 extraction. Found on your PATH; if missing, audio-only downloads still work.
+* **yt-dlp + ffmpeg** — **bundled inside the wheel and the standalone binary**. No first-run download needed. Both binaries (yt-dlp 39 MB + ffmpeg 58 MB) are embedded via `include_bytes!` and extracted to `~/.zoinks/bin/` on first use. Run `zoinks --update` to refresh the bundled yt-dlp to the latest release from GitHub.
 
 ## Usage
 
@@ -103,7 +102,8 @@ from zoinks import Zoinks, default_out_dir
 
 y = Zoinks()
 
-# 1. make sure yt-dlp is installed (downloads it on first run)
+# 1. yt-dlp is bundled inside the wheel — ensure_ytdlp() just extracts it
+#    to ~/.zoinks/bin/ on first call. No network needed.
 y.ensure_ytdlp(status_callback=lambda msg: print(msg))
 
 # 2. probe a URL for media info — pass cookies for X / Facebook / Instagram
@@ -247,10 +247,27 @@ A GitHub Actions workflow that does all of the above on tag push lives in `.gith
 
 ## How it works
 
-- Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp). On first run, zoinks downloads the standalone yt-dlp binary to `~/.zoinks/bin` — no Python required for the Rust binary, no system install needed for the Python wheel. If you already have yt-dlp installed, it uses yours.
-- ffmpeg (needed for merging high-res streams and mp3 extraction) is found on your PATH. Audio-only mp3 downloads work without it.
+- Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp) + [ffmpeg](https://ffmpeg.org/). Both are **bundled inside the binary** via `include_bytes!` and extracted to `~/.zoinks/bin/` on first use — no first-run download, no Python required for the Rust binary, no system yt-dlp/ffmpeg needed. Run `zoinks --update` to refresh the bundled yt-dlp to the latest release from GitHub.
 - The Rust TUI uses [`ratatui`](https://ratatui.rs/) + [`crossterm`](https://github.com/crossterm-rs/crossterm). The Python TUI uses [`textual`](https://textual.textualize.io/).
 - Both TUIs drive the same Rust core (`probe`, `build_choices`, `download`), so behaviour is identical across surfaces.
+
+## Tested sites
+
+End-to-end probe + download test results (yt-dlp 2026.08.19, no cookies):
+
+| Site | Probe | Download | Notes |
+|------|-------|----------|-------|
+| X / Twitter | ✓ 4 choices | ✓ 1.2 MB | works out of the box |
+| Facebook reels | ✓ 3 choices | ✓ 13.6 MB | works out of the box |
+| Soundcloud | ✓ 2 choices | ✓ 464 KB | works out of the box (audio) |
+| Streamable | ✓ 2 choices | ✓ 2.9 MB | works out of the box |
+| YouTube | ⚠ bot wall | ⚠ use `--cookies-from-browser chrome` | YouTube blocks anonymous probes — same as original yoinks |
+| Vimeo | ⚠ login required | ⚠ use `--cookies-from-browser` | site requires account |
+| Reddit | ⚠ login required | ⚠ use `--cookies-from-browser` | Reddit started requiring login in 2024 |
+| Instagram | ⚠ login required | ⚠ use `--cookies-from-browser` | site requires account |
+| TikTok | ⚠ extractor flakiness | ⚠ try `--update` then retry | yt-dlp's TikTok extractor is fragile |
+
+Run the test yourself: `python3 scripts/e2e_probe.py` and `python3 scripts/e2e_download.py`.
 
 ## Roadmap
 

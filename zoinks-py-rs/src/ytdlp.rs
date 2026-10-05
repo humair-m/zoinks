@@ -162,9 +162,10 @@ fn command_works(cmd: &str, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-/// Resolve a usable yt-dlp: system install first, then a previously
-/// downloaded copy in `~/.zoinks/bin`, then fetch the standalone binary
-/// from GitHub releases.
+/// Resolve a usable yt-dlp: embedded binary first (if compiled with
+/// `--features bundled`), then a recent-enough system install, then a
+/// previously downloaded copy in `~/.zoinks/bin`, then fetch the standalone
+/// binary from GitHub releases.
 ///
 /// `on_status` is called (synchronously) with one-line human-readable status
 /// strings — the TUI prints these under its spinner.
@@ -172,10 +173,16 @@ pub fn ensure_yt_dlp(
     on_status: &mut dyn FnMut(&str),
     aborted: &AtomicBool,
 ) -> Result<String, String> {
-    // Prefer the system yt-dlp if it's recent enough. Older system installs
-    // (Debian's `python3-yt-dlp` is often a year out of date) silently fail
-    // on modern X snowflake IDs, FB reels, etc., so we always check the
-    // version string. If it predates 2024 we use our own managed copy.
+    // 1. If we were compiled with the `bundled` feature, extract the embedded
+    //    yt-dlp to ~/.zoinks/bin/ and use it. No network call needed.
+    if let Some(path) = crate::embedded::extract_embedded_yt_dlp() {
+        return Ok(path.to_string_lossy().into_owned());
+    }
+
+    // 2. Prefer the system yt-dlp if it's recent enough. Older system installs
+    //    (Debian's `python3-yt-dlp` is often a year out of date) silently fail
+    //    on modern X snowflake IDs, FB reels, etc., so we always check the
+    //    version string. If it predates 2024 we use our own managed copy.
     if let Some(path) = system_yt_dlp_if_recent() {
         return Ok(path);
     }
@@ -301,10 +308,17 @@ fn yt_dlp_version_is_recent(version: &str) -> bool {
     year_str.parse::<u32>().map(|y| y >= 2024).unwrap_or(false)
 }
 
-/// Find ffmpeg for stream merging / mp3 extraction: system PATH first.
-/// Returns `None` if no usable ffmpeg is found — yt-dlp still works for
-/// single-file formats without it.
+/// Find ffmpeg for stream merging / mp3 extraction: embedded binary first
+/// (if compiled with `--features bundled`), then system PATH. Returns `None`
+/// if no usable ffmpeg is found — yt-dlp still works for single-file formats
+/// without it.
 pub fn find_ffmpeg() -> Option<String> {
+    // 1. If we were compiled with the `bundled` feature, use the embedded ffmpeg
+    if let Some(path) = crate::embedded::extract_embedded_ffmpeg() {
+        return Some(path.to_string_lossy().into_owned());
+    }
+
+    // 2. Otherwise, check the system PATH
     if command_works("ffmpeg", &["-version"]) {
         return None; // on PATH, yt-dlp finds it itself
     }
@@ -317,16 +331,24 @@ pub fn find_ffmpeg() -> Option<String> {
 ///
 /// `cookies` is an optional path to a Netscape-format cookies file — pass
 /// it for sites that require authentication (X/Twitter, Facebook, etc.).
+/// `cookies_from_browser` is an optional browser name (chrome, firefox,
+/// safari, edge, opera, chromium, brave, vivaldi, whale) for yt-dlp's
+/// `--cookies-from-browser` flag — auto-pulls cookies from the named
+/// browser's store. Mutually exclusive with `cookies`.
 pub fn probe(
     ytdlp: &str,
     url: &str,
     cookies: Option<&Path>,
+    cookies_from_browser: Option<&str>,
     aborted: &AtomicBool,
 ) -> Result<ProbeResult, String> {
     let mut cmd = Command::new(ytdlp);
     cmd.args(["-J", "--no-playlist", "--no-warnings"]);
     if let Some(cookies_path) = cookies {
         cmd.args(["--cookies", &cookies_path.to_string_lossy()]);
+    }
+    if let Some(browser) = cookies_from_browser {
+        cmd.args(["--cookies-from-browser", browser]);
     }
     cmd.arg(url);
     cmd.stdin(Stdio::null())
@@ -520,6 +542,10 @@ pub fn download(
         args.push("--cookies".into());
         args.push(cookies_path.to_string_lossy().into_owned());
     }
+    if let Some(browser) = &opts.cookies_from_browser {
+        args.push("--cookies-from-browser".into());
+        args.push(browser.clone());
+    }
     if let Some(loc) = &opts.ffmpeg_location {
         args.push("--ffmpeg-location".into());
         args.push(loc.clone());
@@ -633,6 +659,12 @@ pub struct DownloadOpts {
     /// Optional path to a Netscape-format cookies file. Required by some
     /// sites (X/Twitter, Facebook) for media access.
     pub cookies: Option<PathBuf>,
+    /// Optional browser name for `--cookies-from-browser`. One of:
+    /// chrome, firefox, safari, edge, opera, chromium, brave, vivaldi, whale.
+    /// When set, yt-dlp pulls cookies directly from the named browser's
+    /// cookie store. Mutually exclusive with `cookies` (yt-dlp allows both,
+    /// but in practice you only use one).
+    pub cookies_from_browser: Option<String>,
 }
 
 fn wait_with_abort(
