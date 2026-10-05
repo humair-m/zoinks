@@ -14,7 +14,6 @@ pub struct CliArgs {
     pub initial_url: Option<String>,
     pub theme_mode: Option<ThemeMode>,
     pub cookies: Option<String>,
-    pub cookies_from_browser: Option<String>,
     pub error: Option<String>,
 }
 
@@ -45,17 +44,6 @@ pub fn parse_args(args: &[String]) -> CliArgs {
             result.cookies = Some(value.clone());
         } else if let Some(value) = arg.strip_prefix("--cookies=") {
             result.cookies = Some(value.to_string());
-        } else if arg == "--cookies-from-browser" {
-            i += 1;
-            let Some(value) = args.get(i) else {
-                return CliArgs {
-                    error: Some("--cookies-from-browser needs a value: chrome, firefox, safari, edge, opera, chromium, brave, vivaldi, or whale".to_string()),
-                    ..result
-                };
-            };
-            result.cookies_from_browser = Some(value.clone());
-        } else if let Some(value) = arg.strip_prefix("--cookies-from-browser=") {
-            result.cookies_from_browser = Some(value.to_string());
         } else if arg == "--theme" {
             i += 1;
             let Some(value) = args.get(i) else {
@@ -112,7 +100,7 @@ pub fn parse_args(args: &[String]) -> CliArgs {
 /// The `--help` text — kept here so both the Rust binary and the Python CLI
 /// can print the same string without one drifting from the other.
 pub const HELP: &str = "\
-  zoinks — zoink any video. paste. zoink. done.
+  zoinks — yoink any video. paste. yoink. done.
 
   Usage
     $ zoinks [url]
@@ -121,18 +109,15 @@ pub const HELP: &str = "\
     $ zoinks https://youtu.be/dQw4w9WgXcQ
     $ zoinks https://x.com/user/status/123456
     $ zoinks                                   (prompts for a url)
-    $ zoinks --cookies-from-browser chrome <url>  (auto-pull cookies from Chrome)
-    $ zoinks --cookies cookies.txt <url>           (Netscape-format cookies file)
-    $ zoinks --update                             (update bundled yt-dlp)
+    $ zoinks --cookies cookies.txt <url>       (for X / Facebook / Instagram)
+    $ zoinks --update                          (update bundled yt-dlp)
 
   Options
-    --theme <mode>            use auto, light, or dark for this run
-    --cookies-from-browser <b>  pass cookies from chrome/firefox/safari/edge/
-                              opera/chromium/brave/vivaldi/whale to yt-dlp
-    --cookies <path>         pass a Netscape-format cookies file to yt-dlp
-    -U, --update             update the bundled yt-dlp to the latest release
-    -h, --help               show this help
-    -v, --version            show version
+    --theme <mode>     use auto, light, or dark for this run
+    --cookies <path>   pass a Netscape-format cookies file to yt-dlp
+    -U, --update       update the bundled yt-dlp to the latest release
+    -h, --help         show this help
+    -v, --version      show version
 
   Downloads are saved to ~/Downloads.
   Powered by yt-dlp — YouTube, X, Instagram, Threads, TikTok & 1800+ sites.

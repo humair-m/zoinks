@@ -26,12 +26,6 @@ path = "src/bin/zoinks_tui.rs"
 default = ["python"]
 # PyO3 bindings — turn off to build a pure-Rust library/binary (no Python ABI)
 python = ["dep:pyo3"]
-# Bundle yt-dlp + ffmpeg binaries inside the Rust binary via `include_bytes!`.
-# When on, the binary is completely self-contained: no first-run download,
-# no system yt-dlp/ffmpeg needed. Adds ~95 MB to the binary size.
-# When off (default for `cargo build`), falls back to the original behaviour:
-# uses system yt-dlp if present, else downloads yt-dlp on first run.
-bundled = []
 
 [dependencies]
 # Core (always needed)

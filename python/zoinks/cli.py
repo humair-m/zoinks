@@ -48,7 +48,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         initial_url=args.initial_url,
         theme_mode=theme_mode,
         cookies=args.cookies,
-        cookies_from_browser=args.cookies_from_browser,
     )
     try:
         filepath = app.run()
@@ -56,7 +55,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 130
 
     if filepath:
-        sys.stdout.write(f"✓ zoinked → {filepath}\n")
+        sys.stdout.write(f"✓ yoinked → {filepath}\n")
     return 0
 
 

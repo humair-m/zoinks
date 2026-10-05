@@ -1,4 +1,4 @@
-"""zoinks — zoink any video. paste. zoink. done.
+"""zoinks — yoink any video. paste. yoink. done.
 
 A Python + Rust port of Pablo Stanley's TS `yoinks` TUI
 (https://github.com/pablostanley/yoinks, MIT-licensed). All credit for the

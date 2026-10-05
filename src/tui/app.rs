@@ -37,10 +37,10 @@ use crate::ytdlp::{
     DownloadProgress, VideoInfo,
 };
 
-const TAGLINE: &str = "zoink any video. paste. zoink. done.";
+const TAGLINE: &str = "yoink any video. paste. yoink. done.";
 const SUBTITLE: &str = "youtube · x · instagram · threads · tiktok · +1800 more";
-const YOINK_BUTTON: &str = "zoink";
-const DONE_LABEL: &str = "↵ zoink another";
+const YOINK_BUTTON: &str = "yoink";
+const DONE_LABEL: &str = "↵ yoink another";
 
 type Term = Terminal<CrosstermBackend<Stdout>>;
 
@@ -96,7 +96,6 @@ pub struct App {
     ytdlp_path: Option<String>,
     ffmpeg_path: Option<String>,
     cookies: Option<std::path::PathBuf>,
-    cookies_from_browser: Option<String>,
     phase: Phase,
     list_state: ListState,
     aborted: Arc<AtomicBool>,
@@ -106,14 +105,13 @@ pub struct App {
 
 impl App {
     pub fn new(initial_url: Option<&str>, theme_mode: &str) -> Self {
-        Self::with_cookies(initial_url, theme_mode, None, None)
+        Self::with_cookies(initial_url, theme_mode, None)
     }
 
     pub fn with_cookies(
         initial_url: Option<&str>,
         theme_mode: &str,
         cookies: Option<&std::path::Path>,
-        cookies_from_browser: Option<&str>,
     ) -> Self {
         let mode = ThemeMode::from_str(theme_mode).unwrap_or(ThemeMode::Auto);
         let clipboard_url = if initial_url.is_none() {
@@ -145,7 +143,6 @@ impl App {
             ytdlp_path: None,
             ffmpeg_path: None,
             cookies: cookies.map(|p| p.to_path_buf()),
-            cookies_from_browser: cookies_from_browser.map(|s| s.to_string()),
             phase,
             list_state: ListState::default(),
             aborted: Arc::new(AtomicBool::new(false)),
@@ -182,7 +179,6 @@ impl App {
         self.phase = Phase::Probing { status: "warming up…".into() };
         let ytdlp = self.ytdlp_path.clone();
         let cookies = self.cookies.clone();
-        let cookies_from_browser = self.cookies_from_browser.clone();
         let aborted = self.aborted.clone();
         let inbox = self.inbox.clone();
         let url_cloned = url.clone();
@@ -216,7 +212,7 @@ impl App {
             if let Ok(mut buf) = inbox.lock() {
                 buf.push(WorkerMsg::ProbeStatus("fetching video info…".into()));
             }
-            match probe(&ytdlp, &url_cloned, cookies.as_deref(), cookies_from_browser.as_deref(), &aborted) {
+            match probe(&ytdlp, &url_cloned, cookies.as_deref(), &aborted) {
                 Ok(result) => {
                     let info = result.info.clone();
                     let choices = build_choices(&info);
@@ -245,7 +241,7 @@ impl App {
                         };
                         let _ = ytdlp::update_yt_dlp(&ytdlp, &mut on_status);
                         if !aborted.load(Ordering::SeqCst) {
-                            match probe(&ytdlp, &url_cloned, cookies.as_deref(), cookies_from_browser.as_deref(), &aborted) {
+                            match probe(&ytdlp, &url_cloned, cookies.as_deref(), &aborted) {
                                 Ok(result) => {
                                     let info = result.info.clone();
                                     let choices = build_choices(&info);
@@ -291,7 +287,6 @@ impl App {
         let url = self.url.clone();
         let info_json_path = self.info_json_path.clone();
         let cookies = self.cookies.clone();
-        let cookies_from_browser = self.cookies_from_browser.clone();
         let aborted = self.aborted.clone();
         let inbox = self.inbox.clone();
         let out_dir = crate::default_out_dir();
@@ -308,7 +303,6 @@ impl App {
                 choice: choice.clone(),
                 out_dir: out_dir.clone(),
                 cookies: cookies.clone(),
-                cookies_from_browser: cookies_from_browser.clone(),
             };
             let inbox_for_progress = inbox.clone();
             let inbox_for_processing = inbox.clone();
@@ -361,7 +355,6 @@ impl App {
                         choice,
                         out_dir,
                         cookies,
-                        cookies_from_browser,
                     };
                     let inbox_for_progress2 = inbox.clone();
                     let inbox_for_processing2 = inbox.clone();
@@ -441,14 +434,13 @@ impl App {
 
 /// Run the app to completion. Restores the terminal on exit / panic.
 pub fn run(initial_url: Option<&str>, theme_mode: &str) -> io::Result<Option<String>> {
-    run_with_cookies(initial_url, theme_mode, None, None)
+    run_with_cookies(initial_url, theme_mode, None)
 }
 
 pub fn run_with_cookies(
     initial_url: Option<&str>,
     theme_mode: &str,
     cookies: Option<&std::path::Path>,
-    cookies_from_browser: Option<&str>,
 ) -> io::Result<Option<String>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -457,7 +449,7 @@ pub fn run_with_cookies(
     let mut terminal = Terminal::new(backend)?;
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        run_loop(&mut terminal, initial_url, theme_mode, cookies, cookies_from_browser)
+        run_loop(&mut terminal, initial_url, theme_mode, cookies)
     }));
 
     disable_raw_mode()?;
@@ -478,9 +470,8 @@ fn run_loop(
     initial_url: Option<&str>,
     theme_mode: &str,
     cookies: Option<&std::path::Path>,
-    cookies_from_browser: Option<&str>,
 ) -> io::Result<Option<String>> {
-    let mut app = App::with_cookies(initial_url, theme_mode, cookies, cookies_from_browser);
+    let mut app = App::with_cookies(initial_url, theme_mode, cookies);
     if initial_url.is_some() {
         app.start_probe(initial_url.unwrap().to_string());
     }
@@ -703,7 +694,7 @@ fn render_main(f: &mut ratatui::Frame<'_>, area: Rect, app: &mut App) {
             let block = Block::default()
                 .borders(Borders::ALL)
                 .border_style(app.theme.gray_style())
-                .title(Span::styled(" zoinks ", app.theme.primary_style()));
+                .title(Span::styled(" yoink ", app.theme.primary_style()));
             let inner = block.inner(centered);
             f.render_widget(block, centered);
             f.render_widget(Paragraph::new(lines), inner);
@@ -840,7 +831,7 @@ fn render_main(f: &mut ratatui::Frame<'_>, area: Rect, app: &mut App) {
             let lines = vec![
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("✓ zoinked! ", app.theme.primary_style().add_modifier(Modifier::BOLD)),
+                    Span::styled("✓ yoinked! ", app.theme.primary_style().add_modifier(Modifier::BOLD)),
                     Span::styled("find your file in:", app.theme.primary_style()),
                 ]),
                 Line::from(Span::styled(short, app.theme.gray_style())),
@@ -885,7 +876,7 @@ fn render_footer(f: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
     let mut hints: Vec<(&str, &str)> = Vec::new();
     match app.phase.name() {
         "input" => {
-            hints.push(("↵", "zoink"));
+            hints.push(("↵", "yoink"));
             hints.push(("^c", "quit"));
             if !app.history.is_empty() {
                 hints.push(("↑", "history"));
@@ -897,7 +888,7 @@ fn render_footer(f: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
         }
         "picking" => {
             hints.push(("↑↓", "choose"));
-            hints.push(("↵", "zoink"));
+            hints.push(("↵", "yoink"));
             hints.push(("esc", "back"));
             hints.push(("^c", "quit"));
         }
@@ -906,7 +897,7 @@ fn render_footer(f: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
             hints.push(("^c", "quit"));
         }
         "done" => {
-            hints.push(("↵", "zoink another"));
+            hints.push(("↵", "yoink another"));
             hints.push(("^c", "quit"));
         }
         "error" => {

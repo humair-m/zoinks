@@ -34,10 +34,10 @@ from ..core import (
     read_clipboard,
 )
 
-TAGLINE = "zoink any video. paste. zoink. done."
+TAGLINE = "yoink any video. paste. yoink. done."
 SUBTITLE = "youtube · x · instagram · threads · tiktok · +1800 more"
-YOINK_BUTTON = "zoink"
-DONE_LABEL = "↵ zoink another"
+YOINK_BUTTON = "yoink"
+DONE_LABEL = "↵ yoink another"
 
 LOGO = """\
 ▓ ▓ █▀█ ▀█▀ █▀▄█ █ █ █▀▀
@@ -89,7 +89,7 @@ class Phase:
 
 
 class ZoinksApp(App):
-    """Textual app for zoinks — paste, zoink, done."""
+    """Textual app for zoinks — paste, yoink, done."""
 
     CSS = """
     Screen {
@@ -122,13 +122,11 @@ class ZoinksApp(App):
         initial_url: Optional[str] = None,
         theme_mode: str = "auto",
         cookies: Optional[str] = None,
-        cookies_from_browser: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.initial_url = initial_url
         self.theme_mode = theme_mode
         self.cookies = cookies
-        self.cookies_from_browser = cookies_from_browser
         self.core = Zoinks()
         self.phase = Phase(name="input")
         self.url_input = ""
@@ -195,7 +193,7 @@ class ZoinksApp(App):
 
     def _compose_probing(self) -> ComposeResult:
         with Vertical(id="input-wrap"):
-            yield Static("zoink", id="input-title")
+            yield Static("yoink", id="input-title")
             yield Static(_truncate(self.url, 60), id="status")
             yield Static(f"⠋ {self.phase.status or 'warming up…'}", id="status")
 
@@ -267,17 +265,17 @@ class ZoinksApp(App):
         hints = []
         name = self.phase.name
         if name == "input":
-            hints = [("↵", "zoink"), ("^c", "quit")]
+            hints = [("↵", "yoink"), ("^c", "quit")]
             if self.history:
                 hints.insert(1, ("↑", "history"))
         elif name == "probing":
             hints = [("esc", "cancel"), ("^c", "quit")]
         elif name == "picking":
-            hints = [("↑↓", "choose"), ("↵", "zoink"), ("esc", "back"), ("^c", "quit")]
+            hints = [("↑↓", "choose"), ("↵", "yoink"), ("esc", "back"), ("^c", "quit")]
         elif name == "downloading":
             hints = [("esc", "cancel"), ("^c", "quit")]
         elif name == "done":
-            hints = [("↵", "zoink another"), ("^c", "quit")]
+            hints = [("↵", "yoink another"), ("^c", "quit")]
         elif name == "error":
             hints = [("↵", "try again"), ("^c", "quit")]
         hints.append(("^t", f"theme:{self.theme_mode}"))
@@ -362,7 +360,7 @@ class ZoinksApp(App):
             self.core.ensure_ytdlp(lambda msg: self._set_probe_status(msg))
             self.phase = Phase(name="probing", status="fetching video info…")
             self._rerender()
-            info = self.core.probe(url, cookies=self.cookies, cookies_from_browser=self.cookies_from_browser)
+            info = self.core.probe(url, cookies=self.cookies)
             choices = self.core.build_choices(info)
             self.phase = Phase(name="picking", info=info, choices=choices)
             self._rerender()
@@ -381,7 +379,7 @@ class ZoinksApp(App):
                 self._rerender()
                 try:
                     self.core.update_ytdlp()
-                    info = self.core.probe(url, cookies=self.cookies, cookies_from_browser=self.cookies_from_browser)
+                    info = self.core.probe(url, cookies=self.cookies)
                     choices = self.core.build_choices(info)
                     self.phase = Phase(name="picking", info=info, choices=choices)
                     self._rerender()
@@ -425,7 +423,6 @@ class ZoinksApp(App):
                     choice,
                     info_json_path=info_json,
                     cookies=self.cookies,
-                    cookies_from_browser=self.cookies_from_browser,
                     on_progress=self._on_progress,
                     on_processing=self._on_processing,
                 )
@@ -439,7 +436,6 @@ class ZoinksApp(App):
                     choice,
                     info_json_path=None,
                     cookies=self.cookies,
-                    cookies_from_browser=self.cookies_from_browser,
                     on_progress=self._on_progress,
                     on_processing=self._on_processing,
                 )
@@ -493,14 +489,8 @@ def run(
     initial_url: Optional[str] = None,
     theme_mode: str = "auto",
     cookies: Optional[str] = None,
-    cookies_from_browser: Optional[str] = None,
 ) -> Optional[str]:
     """Module-level entry point — runs the textual app and returns the saved file path."""
-    app = ZoinksApp(
-        initial_url=initial_url,
-        theme_mode=theme_mode,
-        cookies=cookies,
-        cookies_from_browser=cookies_from_browser,
-    )
+    app = ZoinksApp(initial_url=initial_url, theme_mode=theme_mode, cookies=cookies)
     app.run()
     return app.last_filepath

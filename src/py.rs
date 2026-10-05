@@ -250,32 +250,15 @@ impl PyZoinks {
     ///
     /// Pass `cookies` as a path string to a Netscape-format cookies file
     /// for sites that require login (X, Facebook, Instagram).
-    ///
-    /// Pass `cookies_from_browser` as a browser name (chrome, firefox,
-    /// safari, edge, opera, chromium, brave, vivaldi, whale) to auto-pull
-    /// cookies from that browser's store — easiest option for YouTube's
-    /// bot detection. Mutually exclusive with `cookies`.
-    #[pyo3(signature = (url, cookies=None, cookies_from_browser=None))]
-    fn probe(
-        &self,
-        py: Python<'_>,
-        url: &str,
-        cookies: Option<String>,
-        cookies_from_browser: Option<String>,
-    ) -> PyResult<PyVideoInfo> {
+    #[pyo3(signature = (url, cookies=None))]
+    fn probe(&self, py: Python<'_>, url: &str, cookies: Option<String>) -> PyResult<PyVideoInfo> {
         let ytdlp = self.ytdlp_path.clone().unwrap_or_else(|| "yt-dlp".into());
         let aborted = self.aborted.clone();
         let url = url.to_string();
         let cookies_path = cookies.map(std::path::PathBuf::from);
         let result = py
             .allow_threads(move || {
-                probe(
-                    &ytdlp,
-                    &url,
-                    cookies_path.as_deref(),
-                    cookies_from_browser.as_deref(),
-                    &*aborted,
-                )
+                probe(&ytdlp, &url, cookies_path.as_deref(), &*aborted)
             })
             .map_err(PyRuntimeError::new_err)?;
         Ok(PyVideoInfo {
@@ -330,16 +313,12 @@ impl PyZoinks {
     ///   choice      — a `PyDownloadChoice` from `build_choices`
     ///
     /// Keyword arguments:
-    ///   out_dir              — destination dir (default: `~/Downloads`)
-    ///   info_json_path       — reuse the probe's cached metadata
-    ///   cookies              — path to a Netscape-format cookies file
-    ///   cookies_from_browser — browser name (chrome, firefox, safari, edge,
-    ///                          opera, chromium, brave, vivaldi, whale) —
-    ///                          auto-pulls cookies from the browser's store.
-    ///                          Easiest fix for YouTube's bot detection.
-    ///   on_progress          — `callable(dict)` — bytes, speed, eta, etc.
-    ///   on_processing        — `callable()` — called when yt-dlp starts merging
-    #[pyo3(signature = (url, choice, out_dir=None, info_json_path=None, cookies=None, cookies_from_browser=None, on_progress=None, on_processing=None))]
+    ///   out_dir            — destination dir (default: `~/Downloads`)
+    ///   info_json_path     — reuse the probe's cached metadata
+    ///   cookies            — path to a Netscape-format cookies file
+    ///   on_progress        — `callable(dict)` — bytes, speed, eta, etc.
+    ///   on_processing      — `callable()` — called when yt-dlp starts merging
+    #[pyo3(signature = (url, choice, out_dir=None, info_json_path=None, cookies=None, on_progress=None, on_processing=None))]
     fn download(
         &self,
         py: Python<'_>,
@@ -348,7 +327,6 @@ impl PyZoinks {
         out_dir: Option<String>,
         info_json_path: Option<String>,
         cookies: Option<String>,
-        cookies_from_browser: Option<String>,
         on_progress: Option<PyObject>,
         on_processing: Option<PyObject>,
     ) -> PyResult<String> {
@@ -368,7 +346,6 @@ impl PyZoinks {
             choice: choice.into(),
             out_dir,
             cookies,
-            cookies_from_browser,
         };
 
         let mut handlers = ytdlp::DownloadHandlers {

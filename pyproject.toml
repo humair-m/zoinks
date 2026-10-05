@@ -48,10 +48,7 @@ Issues = "https://github.com/humair-m/zoinks/issues"
 Changelog = "https://github.com/humair-m/zoinks/blob/main/CHANGELOG.md"
 
 [tool.maturin]
-# Build with both `python` (PyO3) and `bundled` features so the wheel
-# contains yt-dlp + ffmpeg baked into the Rust extension. First run
-# extracts them to ~/.zoinks/bin/ — no network needed.
-features = ["pyo3/extension-module", "bundled"]
+features = ["pyo3/extension-module"]
 python-source = "python"
 module-name = "zoinks._zoinks_core"
 include = ["assets/**/*", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md", "CONTRIBUTING.md", "INSTALL.md"]
