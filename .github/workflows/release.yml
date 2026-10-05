@@ -9,9 +9,15 @@ jobs:
   # Build the Python wheel with bundled yt-dlp + ffmpeg for each platform.
   # The `bundled` Cargo feature bakes them into the wheel via include_bytes!,
   # so the wheel is self-contained (~90 MB) — no first-run download needed.
+  #
+  # macOS x86_64 is marked continue-on-error because GitHub Actions has
+  # limited Intel macOS runner availability on free accounts — the run can
+  # sit queued for hours. The release will still publish with whatever
+  # artifacts succeed.
   python-wheels:
     name: Wheel · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.name == 'macos-x86_64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +80,7 @@ jobs:
   rust-binaries:
     name: Binary · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.name == 'macos-x86_64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -191,7 +198,7 @@ jobs:
             dist/zoinks-tui-*
             dist/zoinks-*.whl
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
           body: |
             ## Installation
 
