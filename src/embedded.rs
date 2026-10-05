@@ -16,8 +16,10 @@
 //! and downloads yt-dlp on first run to `~/.zoinks/bin`.
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use crate::zoinks_bin_dir;
 
@@ -61,9 +63,12 @@ pub fn extract_embedded_yt_dlp() -> Option<PathBuf> {
         if fs::write(&tmp, YT_DLP_BYTES).is_err() {
             return None;
         }
-        let mut perms = fs::metadata(&tmp).ok()?.permissions();
-        perms.set_mode(0o755);
-        let _ = fs::set_permissions(&tmp, perms);
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(&tmp).ok()?.permissions();
+            perms.set_mode(0o755);
+            let _ = fs::set_permissions(&tmp, perms);
+        }
         if fs::rename(&tmp, &dest).is_err() {
             let _ = fs::remove_file(&tmp);
             return None;
@@ -104,9 +109,12 @@ pub fn extract_embedded_ffmpeg() -> Option<PathBuf> {
         if fs::write(&tmp, FFMPEG_BYTES).is_err() {
             return None;
         }
-        let mut perms = fs::metadata(&tmp).ok()?.permissions();
-        perms.set_mode(0o755);
-        let _ = fs::set_permissions(&tmp, perms);
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(&tmp).ok()?.permissions();
+            perms.set_mode(0o755);
+            let _ = fs::set_permissions(&tmp, perms);
+        }
         if fs::rename(&tmp, &dest).is_err() {
             let _ = fs::remove_file(&tmp);
             return None;
