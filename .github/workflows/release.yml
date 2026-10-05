@@ -6,20 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Build & upload the Python wheels for every supported platform / arch.
-  # maturin handles the cross-compilation matrix internally via the
-  # PyO3 abi3-py38 feature — one wheel per platform covers Python 3.8-3.13.
+  # Build the Python wheel with bundled yt-dlp + ffmpeg for each platform.
+  # The `bundled` Cargo feature bakes them into the wheel via include_bytes!,
+  # so the wheel is self-contained (~90 MB) — no first-run download needed.
   python-wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Wheel · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-22.04
-          - macos-13        # Intel
-          - macos-14        # Apple Silicon
-          - windows-2022
+        include:
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - name: macos-x86_64
+            os: macos-13
+            target: x86_64-apple-darwin
+          - name: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+          - name: windows-x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
 
@@ -28,49 +36,68 @@ jobs:
           python-version: "3.12"
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Install upx so build.rs can compress the bundled ffmpeg
+      # (Linux only — upx doesn't help much on macOS/Windows and isn't preinstalled)
+      - name: Install upx (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -sL "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz" -o /tmp/upx.tar.xz
+          tar xf /tmp/upx.tar.xz -C /tmp
+          sudo cp /tmp/upx-4.2.4-amd64_linux/upx /usr/local/bin/
+          upx --version | head -1
 
       - name: Install maturin
         run: pip install maturin
 
-      - name: Build wheel
+      - name: Build wheel (with bundled yt-dlp + ffmpeg)
         run: maturin build --release --out dist
         shell: bash
+        env:
+          # build.rs will auto-download yt-dlp + ffmpeg for the host platform
+          CARGO_FEATURE_BUNDLED: "1"
 
-      - name: Build musllinux wheel (Linux only)
-        if: runner.os == 'Linux'
-        run: maturin build --release --interpreter python3.12 --target x86_64-unknown-linux-musl --out dist || true
+      - name: List wheel
+        run: ls -lh dist/
         shell: bash
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheel-${{ matrix.name }}
           path: dist/*.whl
           if-no-files-found: error
 
-  # Build the standalone Rust TUI binary for every platform.
+  # Build the standalone Rust TUI binary with bundled yt-dlp + ffmpeg.
+  # No Python required — these are 100% self-contained executables.
   rust-binaries:
-    name: Build zoinks-tui on ${{ matrix.target }}
+    name: Binary · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - name: linux-x86_64
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact: zoinks-tui-x86_64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            target: aarch64-unknown-linux-gnu
-            artifact: zoinks-tui-aarch64-unknown-linux-gnu
-            cross: true
-          - os: macos-13
+            ext: ""
+          - name: macos-x86_64
+            os: macos-13
             target: x86_64-apple-darwin
             artifact: zoinks-tui-x86_64-apple-darwin
-          - os: macos-14
+            ext: ""
+          - name: macos-arm64
+            os: macos-14
             target: aarch64-apple-darwin
             artifact: zoinks-tui-aarch64-apple-darwin
-          - os: windows-2022
+            ext: ""
+          - name: windows-x86_64
+            os: windows-2022
             target: x86_64-pc-windows-gnu
-            artifact: zoinks-tui-x86_64-pc-windows-gnu.exe
+            artifact: zoinks-tui-x86_64-pc-windows-gnu
+            ext: ".exe"
     steps:
       - uses: actions/checkout@v4
 
@@ -78,32 +105,36 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross
-        if: matrix.cross
-        run: cargo install cross
-
-      - name: Build binary
+      # Install upx on Linux so build.rs can compress the bundled ffmpeg
+      - name: Install upx (Linux)
+        if: runner.os == 'Linux'
         run: |
-          if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --no-default-features --bin zoinks-tui --target ${{ matrix.target }}
-          else
-            cargo build --release --no-default-features --bin zoinks-tui --target ${{ matrix.target }}
-          fi
+          curl -sL "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz" -o /tmp/upx.tar.xz
+          tar xf /tmp/upx.tar.xz -C /tmp
+          sudo cp /tmp/upx-4.2.4-amd64_linux/upx /usr/local/bin/
+          upx --version | head -1
+
+      - name: Build binary (with bundled yt-dlp + ffmpeg)
+        run: cargo build --release --no-default-features --features bundled --bin zoinks-tui --target ${{ matrix.target }}
         shell: bash
 
       - name: Rename artifact
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/zoinks-tui${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }} dist/${{ matrix.artifact }}
+          cp "target/${{ matrix.target }}/release/zoinks-tui${{ matrix.ext }}" "dist/${{ matrix.artifact }}${{ matrix.ext }}"
+        shell: bash
+
+      - name: List binary
+        run: ls -lh dist/
         shell: bash
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}${{ matrix.ext }}
           if-no-files-found: error
 
-  # Run cargo test on Linux to make sure nothing regressed.
+  # Quick sanity check: cargo test must pass before we publish anything.
   rust-tests:
     name: Rust tests
     runs-on: ubuntu-22.04
@@ -112,10 +143,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --no-default-features --lib
 
-  # Publish everything to the GitHub release on tag.
+  # Quick sanity check: Python tests must pass too.
+  python-tests:
+    name: Python tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pip install maturin textual pytest ruff
+      - run: maturin build --release --out dist
+      - run: pip install --no-deps --force-reinstall dist/*.whl
+      - run: pytest tests/
+      - run: ruff check python/zoinks/
+
+  # Publish everything to the GitHub Release on tag push.
+  # Downloads all artifacts from the build jobs and uploads them as release assets.
   release:
     name: Publish to GitHub Releases
-    needs: [python-wheels, rust-binaries, rust-tests]
+    needs: [python-wheels, rust-binaries, rust-tests, python-tests]
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -128,8 +176,13 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: List artifacts
-        run: ls -lh dist/
+      - name: List all release artifacts
+        run: |
+          echo "=== Artifacts to be published ==="
+          ls -lh dist/
+          echo
+          echo "=== Total size ==="
+          du -sh dist/
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -139,3 +192,42 @@ jobs:
             dist/zoinks-*.whl
           generate_release_notes: true
           fail_on_unmatched_files: true
+          body: |
+            ## Installation
+
+            ### Python package (recommended)
+
+            ```sh
+            pip install zoinks==${{ github.ref_name }}
+            ```
+
+            Or download the wheel for your platform from the assets below and:
+            ```sh
+            pip install zoinks-*.whl
+            ```
+
+            The wheel bundles yt-dlp + ffmpeg (~90 MB) — no first-run download needed.
+
+            ### Standalone Rust binary (no Python required)
+
+            Download `zoinks-tui-<your-platform>` from the assets below, make it executable, and run:
+
+            ```sh
+            ./zoinks-tui-x86_64-unknown-linux-gnu https://youtu.be/dQw4w9WgXcQ
+            ```
+
+            The binary bundles yt-dlp + ffmpeg (~90 MB) — fully self-contained.
+
+            ## Available platforms
+
+            | Platform | Wheel | Binary |
+            |----------|-------|--------|
+            | Linux x86_64 | ✓ | ✓ |
+            | macOS x86_64 (Intel) | ✓ | ✓ |
+            | macOS arm64 (Apple Silicon) | ✓ | ✓ |
+            | Windows x86_64 | ✓ | ✓ |
+
+            ## Attribution
+
+            `zoinks` is a Python + Rust port of [Pablo Stanley's `yoinks`](https://github.com/pablostanley/yoinks).
+            All credit for the original design, tagline, and logo goes to him. MIT license preserved.
