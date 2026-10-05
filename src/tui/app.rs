@@ -608,9 +608,9 @@ fn render(f: &mut ratatui::Frame<'_>, app: &mut App) {
 
 fn render_logo(f: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
     let art = vec![
-        "▓ ▓ █▀█ ▀█▀ █▀▄█ █ █ █▀▀",
-        "▀█▀ █ ▓  ▓  █  ▓ ▓▀▄ ▀▀▓",
-        " ▀  ▀▀▀ ▀▀▀ ▀  ▀ ▀ ▀ ▀▀▀",
+        "███ █▀█ ▀█▀ █▀▄█ █ █ █▀▀",
+        " ▄▀ █ ▓  ▓  █  ▓ ▓▀▄ ▀▀▓",
+        "▀▀▀ ▀▀▀ ▀▀▀ ▀  ▀ ▀ ▀ ▀▀▀",
     ];
     let lines: Vec<Line> = art
         .iter()
