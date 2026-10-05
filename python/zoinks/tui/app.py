@@ -7,14 +7,13 @@ shared across the background worker thread the textual app spawns.
 
 from __future__ import annotations
 
-import threading
+import typing
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
 
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Vertical, Horizontal
+from textual.containers import Center, Vertical
 from textual.widgets import (
     Input,
     Label,
@@ -22,22 +21,19 @@ from textual.widgets import (
     ListView,
     Static,
 )
-from textual.worker import Worker
 
 from ..core import (
     Zoinks,
     add_to_history,
-    default_out_dir,
-    detect_platform,
     is_probably_url,
     load_history,
     read_clipboard,
 )
 
-TAGLINE = "yoink any video. paste. yoink. done."
+TAGLINE = "zoink any video. paste. zoink. done."
 SUBTITLE = "youtube · x · instagram · threads · tiktok · +1800 more"
-YOINK_BUTTON = "yoink"
-DONE_LABEL = "↵ yoink another"
+YOINK_BUTTON = "zoink"
+DONE_LABEL = "↵ zoink another"
 
 LOGO = """\
 ▓ ▓ █▀█ ▀█▀ █▀▄█ █ █ █▀▀
@@ -60,7 +56,7 @@ def _format_bytes(n: float) -> str:
 def _format_duration(seconds: float) -> str:
     if not isinstance(seconds, (int, float)) or seconds <= 0:
         return ""
-    s = int(round(seconds))
+    s = round(seconds)
     h, rem = divmod(s, 3600)
     m, sec = divmod(rem, 60)
     if h > 0:
@@ -77,19 +73,19 @@ def _truncate(text: str, max_len: int) -> str:
 @dataclass
 class Phase:
     name: str = "input"
-    warning: Optional[str] = None
-    status: Optional[str] = None
-    info: Optional[object] = None
-    choices: List[object] = field(default_factory=list)
-    progress: Optional[dict] = None
+    warning: str | None = None
+    status: str | None = None
+    info: object | None = None
+    choices: list[object] = field(default_factory=list)
+    progress: dict | None = None
     processing: bool = False
     refreshing: bool = False
-    filepath: Optional[str] = None
-    message: Optional[str] = None
+    filepath: str | None = None
+    message: str | None = None
 
 
 class ZoinksApp(App):
-    """Textual app for zoinks — paste, yoink, done."""
+    """Textual app for zoinks — paste, zoink, done."""
 
     CSS = """
     Screen {
@@ -112,38 +108,40 @@ class ZoinksApp(App):
     #footer { dock: bottom; height: 1; text-align: center; color: $text-muted; }
     """
 
-    BINDINGS = [
+    BINDINGS: typing.ClassVar[list[Binding]] = [
         Binding("ctrl+t", "cycle_theme", "theme", show=True),
         Binding("ctrl+c", "quit", "quit", show=True),
     ]
 
     def __init__(
         self,
-        initial_url: Optional[str] = None,
+        initial_url: str | None = None,
         theme_mode: str = "auto",
-        cookies: Optional[str] = None,
+        cookies: str | None = None,
+        cookies_from_browser: str | None = None,
     ) -> None:
         super().__init__()
         self.initial_url = initial_url
         self.theme_mode = theme_mode
         self.cookies = cookies
+        self.cookies_from_browser = cookies_from_browser
         self.core = Zoinks()
         self.phase = Phase(name="input")
         self.url_input = ""
         self.url = ""
         self.clipboard_url = self._detect_clipboard()
         self.history = load_history()
-        self.last_filepath: Optional[str] = None
-        self.list_view: Optional[ListView] = None
+        self.last_filepath: str | None = None
+        self.list_view: ListView | None = None
 
     # ---- lifecycle ------------------------------------------------------
 
-    def _detect_clipboard(self) -> Optional[str]:
+    def _detect_clipboard(self) -> str | None:
         if self.initial_url:
             return None
         try:
             clipped = read_clipboard().strip()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
         if clipped and not any(c.isspace() for c in clipped) and is_probably_url(clipped):
             return clipped
@@ -156,13 +154,12 @@ class ZoinksApp(App):
             self.phase = Phase(name="input")
 
     def compose(self) -> ComposeResult:
-        with Center():
-            with Vertical():
-                yield Static(LOGO, id="logo")
-                yield Static(TAGLINE, id="tagline")
-                yield Static(SUBTITLE, id="subtitle")
-                yield from self._compose_main()
-                yield Static(self._footer_text(), id="footer")
+        with Center(), Vertical():
+            yield Static(LOGO, id="logo")
+            yield Static(TAGLINE, id="tagline")
+            yield Static(SUBTITLE, id="subtitle")
+            yield from self._compose_main()
+            yield Static(self._footer_text(), id="footer")
 
     def _compose_main(self) -> ComposeResult:
         if self.phase.name == "input":
@@ -193,7 +190,7 @@ class ZoinksApp(App):
 
     def _compose_probing(self) -> ComposeResult:
         with Vertical(id="input-wrap"):
-            yield Static("yoink", id="input-title")
+            yield Static("zoink", id="input-title")
             yield Static(_truncate(self.url, 60), id="status")
             yield Static(f"⠋ {self.phase.status or 'warming up…'}", id="status")
 
@@ -265,17 +262,17 @@ class ZoinksApp(App):
         hints = []
         name = self.phase.name
         if name == "input":
-            hints = [("↵", "yoink"), ("^c", "quit")]
+            hints = [("↵", "zoink"), ("^c", "quit")]
             if self.history:
                 hints.insert(1, ("↑", "history"))
         elif name == "probing":
             hints = [("esc", "cancel"), ("^c", "quit")]
         elif name == "picking":
-            hints = [("↑↓", "choose"), ("↵", "yoink"), ("esc", "back"), ("^c", "quit")]
+            hints = [("↑↓", "choose"), ("↵", "zoink"), ("esc", "back"), ("^c", "quit")]
         elif name == "downloading":
             hints = [("esc", "cancel"), ("^c", "quit")]
         elif name == "done":
-            hints = [("↵", "yoink another"), ("^c", "quit")]
+            hints = [("↵", "zoink another"), ("^c", "quit")]
         elif name == "error":
             hints = [("↵", "try again"), ("^c", "quit")]
         hints.append(("^t", f"theme:{self.theme_mode}"))
@@ -297,7 +294,7 @@ class ZoinksApp(App):
         try:
             footer = self.query_one("#footer", Static)
             footer.update(self._footer_text())
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -314,9 +311,8 @@ class ZoinksApp(App):
                 self._cancel_run()
             elif self.phase.name in ("picking", "error", "done"):
                 self._reset_to_input()
-        elif event.key == "enter":
-            if self.phase.name in ("error", "done"):
-                self._reset_to_input()
+        elif event.key == "enter" and self.phase.name in ("error", "done"):
+            self._reset_to_input()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         idx = event.list_view.index or 0
@@ -360,11 +356,11 @@ class ZoinksApp(App):
             self.core.ensure_ytdlp(lambda msg: self._set_probe_status(msg))
             self.phase = Phase(name="probing", status="fetching video info…")
             self._rerender()
-            info = self.core.probe(url, cookies=self.cookies)
+            info = self.core.probe(url, cookies=self.cookies, cookies_from_browser=self.cookies_from_browser)
             choices = self.core.build_choices(info)
             self.phase = Phase(name="picking", info=info, choices=choices)
             self._rerender()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if "aborted" in str(e).lower():
                 return
             # If yt-dlp rejected the URL, try updating yt-dlp and retry once.
@@ -379,12 +375,12 @@ class ZoinksApp(App):
                 self._rerender()
                 try:
                     self.core.update_ytdlp()
-                    info = self.core.probe(url, cookies=self.cookies)
+                    info = self.core.probe(url, cookies=self.cookies, cookies_from_browser=self.cookies_from_browser)
                     choices = self.core.build_choices(info)
                     self.phase = Phase(name="picking", info=info, choices=choices)
                     self._rerender()
                     return
-                except Exception as e2:
+                except Exception as e2:  # noqa: BLE001
                     if "aborted" in str(e2).lower():
                         return
                     self.phase = Phase(name="error", message=str(e2))
@@ -414,7 +410,7 @@ class ZoinksApp(App):
         self._download_worker(self.url, choice, getattr(self.phase.info, "info_json_path", None))
 
     @work(exclusive=True, exit_on_error=False, name="zoinks-download")
-    async def _download_worker(self, url: str, choice, info_json_path: Optional[str]) -> None:
+    async def _download_worker(self, url: str, choice, info_json_path: str | None) -> None:
         info_json = info_json_path
         try:
             try:
@@ -423,10 +419,11 @@ class ZoinksApp(App):
                     choice,
                     info_json_path=info_json,
                     cookies=self.cookies,
+                    cookies_from_browser=self.cookies_from_browser,
                     on_progress=self._on_progress,
                     on_processing=self._on_processing,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # media URLs in the cached info can expire — retry with fresh extraction
                 self.phase.refreshing = True
                 self.phase.progress = None
@@ -436,6 +433,7 @@ class ZoinksApp(App):
                     choice,
                     info_json_path=None,
                     cookies=self.cookies,
+                    cookies_from_browser=self.cookies_from_browser,
                     on_progress=self._on_progress,
                     on_processing=self._on_processing,
                 )
@@ -443,7 +441,7 @@ class ZoinksApp(App):
             self.history = add_to_history(url)
             self.phase = Phase(name="done", filepath=filepath)
             self._rerender()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if "cancelled" in str(e).lower() or "aborted" in str(e).lower():
                 return
             self.phase = Phase(name="error", message=str(e))
@@ -477,20 +475,26 @@ class ZoinksApp(App):
                 try:
                     widget = self.query_one(f"#{child_id}")
                     widget.remove()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
             # we re-mount by calling compose again — simplest path is refresh
             self.refresh(peripheral=False)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
 
 def run(
-    initial_url: Optional[str] = None,
+    initial_url: str | None = None,
     theme_mode: str = "auto",
-    cookies: Optional[str] = None,
-) -> Optional[str]:
+    cookies: str | None = None,
+    cookies_from_browser: str | None = None,
+) -> str | None:
     """Module-level entry point — runs the textual app and returns the saved file path."""
-    app = ZoinksApp(initial_url=initial_url, theme_mode=theme_mode, cookies=cookies)
+    app = ZoinksApp(
+        initial_url=initial_url,
+        theme_mode=theme_mode,
+        cookies=cookies,
+        cookies_from_browser=cookies_from_browser,
+    )
     app.run()
     return app.last_filepath

@@ -1,4 +1,4 @@
-"""zoinks — yoink any video. paste. yoink. done.
+"""zoinks — zoink any video. paste. zoink. done.
 
 A Python + Rust port of Pablo Stanley's TS `yoinks` TUI
 (https://github.com/pablostanley/yoinks, MIT-licensed). All credit for the
@@ -21,12 +21,16 @@ Or the full TUI:
     zoinks   # if installed via `pip install zoinks`
 """
 
+from __future__ import annotations
+
+from typing import Sequence
+
 from .core import (
-    Zoinks,
+    DownloadChoice,
+    Format,
     Platform,
     VideoInfo,
-    Format,
-    DownloadChoice,
+    Zoinks,
     add_to_history,
     default_out_dir,
     detect_platform,
@@ -36,14 +40,22 @@ from .core import (
     version,
     zoinks_bin_dir,
 )
-from .cli import main
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entry point — lazily imports the textual app to avoid a circular
+    import (the textual TUI itself imports from zoinks.core).
+    """
+    from .cli import main as _main
+
+    return _main(argv)
 
 __all__ = [
-    "Zoinks",
+    "DownloadChoice",
+    "Format",
     "Platform",
     "VideoInfo",
-    "Format",
-    "DownloadChoice",
+    "Zoinks",
     "add_to_history",
     "default_out_dir",
     "detect_platform",

@@ -7,7 +7,6 @@ strings stay localised to whichever surface the user happened to invoke.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 VALID_THEMES = ("auto", "light", "dark")
 
@@ -17,15 +16,16 @@ class CliArgs:
     help: bool = False
     version: bool = False
     update: bool = False
-    initial_url: Optional[str] = None
-    theme_mode: Optional[str] = None
-    cookies: Optional[str] = None
-    error: Optional[str] = None
+    initial_url: str | None = None
+    theme_mode: str | None = None
+    cookies: str | None = None
+    cookies_from_browser: str | None = None
+    error: str | None = None
 
 
-def parse_args(args: List[str]) -> CliArgs:
+def parse_args(args: list[str]) -> CliArgs:
     result = CliArgs()
-    positional: List[str] = []
+    positional: list[str] = []
 
     i = 0
     while i < len(args):
@@ -45,6 +45,15 @@ def parse_args(args: List[str]) -> CliArgs:
             result.cookies = args[i]
         elif arg.startswith("--cookies="):
             result.cookies = arg[len("--cookies="):]
+        elif arg == "--cookies-from-browser":
+            i += 1
+            if i >= len(args):
+                return CliArgs(
+                    error="--cookies-from-browser needs a value: chrome, firefox, safari, edge, opera, chromium, brave, vivaldi, or whale",
+                )
+            result.cookies_from_browser = args[i]
+        elif arg.startswith("--cookies-from-browser="):
+            result.cookies_from_browser = arg[len("--cookies-from-browser="):]
         elif arg == "--theme":
             i += 1
             if i >= len(args):
@@ -78,7 +87,7 @@ def parse_args(args: List[str]) -> CliArgs:
 
 
 HELP = """\
-  zoinks — yoink any video. paste. yoink. done.
+  zoinks — zoink any video. paste. zoink. done.
 
   Usage
     $ zoinks [url]
@@ -87,15 +96,18 @@ HELP = """\
     $ zoinks https://youtu.be/dQw4w9WgXcQ
     $ zoinks https://x.com/user/status/123456
     $ zoinks                                   (prompts for a url)
-    $ zoinks --cookies cookies.txt <url>       (for X / Facebook / Instagram)
-    $ zoinks --update                          (update bundled yt-dlp)
+    $ zoinks --cookies-from-browser chrome <url>  (auto-pull cookies from Chrome)
+    $ zoinks --cookies cookies.txt <url>           (Netscape-format cookies file)
+    $ zoinks --update                             (update bundled yt-dlp)
 
   Options
-    --theme <mode>     use auto, light, or dark for this run
-    --cookies <path>   pass a Netscape-format cookies file to yt-dlp
-    -U, --update       update the bundled yt-dlp to the latest release
-    -h, --help         show this help
-    -v, --version      show version
+    --theme <mode>            use auto, light, or dark for this run
+    --cookies-from-browser <b>  pass cookies from chrome/firefox/safari/edge/
+                              opera/chromium/brave/vivaldi/whale to yt-dlp
+    --cookies <path>         pass a Netscape-format cookies file to yt-dlp
+    -U, --update             update the bundled yt-dlp to the latest release
+    -h, --help               show this help
+    -v, --version            show version
 
   Downloads are saved to ~/Downloads.
   Powered by yt-dlp — YouTube, X, Instagram, Threads, TikTok & 1800+ sites.

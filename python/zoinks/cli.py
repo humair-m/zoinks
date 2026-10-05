@@ -9,14 +9,14 @@ Parses args, then either:
 from __future__ import annotations
 
 import sys
-from typing import Optional, Sequence
+from typing import Sequence
 
-from .args import parse_args, HELP
+from .args import HELP, parse_args
+from .core import Zoinks, version
 from .tui.app import ZoinksApp
-from . import version, Zoinks
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     if args.error:
@@ -39,7 +39,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             z.update_ytdlp()
             sys.stderr.write("zoinks: yt-dlp updated.\n")
             return 0
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"zoinks: update failed: {e}\n")
             return 1
 
@@ -48,6 +48,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         initial_url=args.initial_url,
         theme_mode=theme_mode,
         cookies=args.cookies,
+        cookies_from_browser=args.cookies_from_browser,
     )
     try:
         filepath = app.run()
@@ -55,7 +56,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 130
 
     if filepath:
-        sys.stdout.write(f"✓ yoinked → {filepath}\n")
+        sys.stdout.write(f"✓ zoinked → {filepath}\n")
     return 0
 
 

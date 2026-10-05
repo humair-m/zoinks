@@ -18,3 +18,6 @@ build/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+# bundled yt-dlp + ffmpeg binaries (95 MB) — embedded via include_bytes!
+# download with `scripts/fetch-bundled-binaries.sh` if rebuilding offline
+/bundled/
