@@ -1,0 +1,53 @@
+[package]
+name = "zoinks"
+version = "0.4.1"
+edition = "2021"
+rust-version = "1.74"
+authors = ["humair-m <humair-m@users.noreply.github.com>"]
+license = "MIT"
+description = "yoink any video — Python + Rust interface. Wraps yt-dlp for YouTube, X, Instagram, Threads, TikTok and 1,800+ sites."
+repository = "https://github.com/humair-m/zoinks"
+homepage = "https://github.com/humair-m/zoinks"
+documentation = "https://github.com/humair-m/zoinks#readme"
+readme = "README.md"
+keywords = ["video", "downloader", "yt-dlp", "youtube", "tui"]
+categories = ["command-line-utilities", "api-bindings", "multimedia::video"]
+exclude = [".github/", "target/", "tests/fixtures/", "*.snap"]
+
+[lib]
+name = "zoinks"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "zoinks-tui"
+path = "src/bin/zoinks_tui.rs"
+
+[features]
+default = ["python"]
+# PyO3 bindings — turn off to build a pure-Rust library/binary (no Python ABI)
+python = ["dep:pyo3"]
+
+[dependencies]
+# Core (always needed)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["tls"] }
+directories = "5"
+which = "6"
+
+# PyO3 — only pulled in when the `python` feature is on
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"], optional = true }
+
+# TUI (used by the standalone binary target)
+crossterm = "0.28"
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0

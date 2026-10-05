@@ -1,0 +1,73 @@
+# NOTICE — zoinks
+
+This project, `zoinks`, is a Python + Rust port of Pablo Stanley's
+[`yoinks`](https://github.com/pablostanley/yoinks) TypeScript TUI
+([MIT-licensed](https://github.com/pablostanley/yoinks/blob/master/LICENSE)).
+
+## What was ported from `yoinks`
+
+The following were directly translated (with permission under the MIT
+license) from the original `yoinks` TypeScript source by Pablo Stanley:
+
+- **Overall UX flow** — the input → probing → picking → downloading → done
+  phase machine, including the specific keyboard shortcuts (`^t` for theme,
+  `↑`/`↓` or `j`/`k` for picker, `esc` back, `^c` quit).
+- **Tagline & copy** — "yoink any video. paste. yoink. done." and the
+  footer-hint wording.
+- **Block-character logo** — the 3-row ASCII art logo
+  (`▓ ▓ █▀█ ▀█▀ █▀▄█ █ █ █▀▀` / `▀█▀ █ ▓  ▓  █  ▓ ▓▀▄ ▀▀▓` /
+  ` ▀  ▀▀▀ ▀▀▀ ▀  ▀ ▀ ▀ ▀▀▀`) ships verbatim.
+- **Theme palette** — the exact `#18181b` / `#52525b` / `#a1a1aa` / `#ffffff`
+  hex values for `light` and `dark` modes.
+- **Platform detection table** — the YouTube / X / Instagram / Threads /
+  TikTok / Vimeo / Twitch / Reddit / Facebook host list.
+- **yt-dlp wrapper logic** — the `ensure_yt_dlp` (download-or-reuse)
+  strategy, the `build_choices` height-cap + audio-only-mp3 picker, the
+  `YOINK|...` progress wire format, and the cached-info.json fast-path +
+  retry-on-failure flow.
+- **Storage layout** — `~/.<name>/bin` for the bundled yt-dlp,
+  `~/.config/<name>/history.json` for the URL history (capped at 50,
+  deduped).
+- **Logo and screenshot assets** — `assets/logo-light.svg`,
+  `assets/logo-dark.svg`, `assets/home.png`, `assets/download-options.png`
+  are byte-for-byte copies of the originals.
+- **MIT license** — preserved.
+
+## What is new in `zoinks`
+
+- **PyO3 bindings** exposing the Rust core as a Python module
+  (`zoinks._zoinks_core`), installable via `pip install zoinks`.
+- **Textual-based Python TUI** (`python/zoinks/tui/app.py`) — a parallel
+  implementation to the Rust ratatui TUI, driven by the same Rust core.
+- **`--cookies <file>` flag** — pass a Netscape-format cookies file to
+  yt-dlp for sites that require login (X, Facebook, Instagram).
+- **`--update` / `-U` flag** — refresh the bundled yt-dlp binary on
+  demand.
+- **Auto-update on `Unsupported URL`** — if yt-dlp rejects a URL, zoinks
+  runs `yt-dlp -U` and retries automatically (handles the case where
+  the bundled yt-dlp is a few weeks out of date and a site shipped a
+  new URL scheme, e.g., X's 19-digit snowflake IDs).
+- **Auto-retry on download failure** — if the cached media URLs expire,
+  zoinks retries once with a fresh probe (the Rust TUI now matches the
+  Python TUI's behaviour).
+- **Permissive format selector** — falls back through 6 alternatives
+  instead of 4, with the ultimate `b` always matching.
+- **Actionable error messages** — known patterns (`Unsupported URL`,
+  `No video formats found`, `Requested format is not available`,
+  `login required`, `429 Too Many Requests`) get a one-line hint about
+  what to do.
+- **`yt_dlp_version_is_recent` check** — refuses to use a system yt-dlp
+  older than 2024.0 (silently out-of-date system installs were the
+  root cause of the original "Unsupported URL" / "No video formats"
+  failures).
+
+## Attribution
+
+All credit for the design, tagline, and the lovely block-character logo
+goes to **Pablo Stanley** ([@pablostanley](https://github.com/pablostanley)).
+This port exists because the original is delightful, and we wanted the
+same UX available to Python + Rust workflows.
+
+The original `yoinks` project: https://github.com/pablostanley/yoinks
+
+— humair-m, October 2026

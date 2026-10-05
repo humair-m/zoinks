@@ -1,0 +1,54 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "zoinks"
+version = "0.4.1"
+description = "yoink any video — Python + Rust interface. Wraps yt-dlp for YouTube, X, Instagram, Threads, TikTok and 1,800+ sites."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "humair-m" }]
+requires-python = ">=3.8"
+keywords = ["video", "downloader", "yt-dlp", "youtube", "tui", "rust"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Rust",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "textual>=0.86",
+  "rich>=13",
+]
+
+[project.optional-dependencies]
+dev = [
+  "maturin>=1.5",
+  "pytest>=7",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+zoinks = "zoinks.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/humair-m/zoinks"
+Repository = "https://github.com/humair-m/zoinks"
+Issues = "https://github.com/humair-m/zoinks/issues"
+Changelog = "https://github.com/humair-m/zoinks/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "zoinks._zoinks_core"
+include = ["assets/**/*", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md", "CONTRIBUTING.md", "INSTALL.md"]
