@@ -10,14 +10,13 @@ jobs:
   # The `bundled` Cargo feature bakes them into the wheel via include_bytes!,
   # so the wheel is self-contained (~90 MB) — no first-run download needed.
   #
-  # macOS x86_64 is marked continue-on-error because GitHub Actions has
-  # limited Intel macOS runner availability on free accounts — the run can
-  # sit queued for hours. The release will still publish with whatever
-  # artifacts succeed.
+  # NOTE: macOS x86_64 (Intel) is excluded from the matrix. GitHub Actions
+  # free accounts have very limited Intel macOS runner availability, and
+  # the macOS arm64 (Apple Silicon) wheel works fine on Intel Macs via
+  # Rosetta 2 (which ships pre-installed on every Intel Mac).
   python-wheels:
     name: Wheel · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.name == 'macos-x86_64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -25,9 +24,6 @@ jobs:
           - name: linux-x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - name: macos-x86_64
-            os: macos-13
-            target: x86_64-apple-darwin
           - name: macos-arm64
             os: macos-14
             target: aarch64-apple-darwin
@@ -61,9 +57,6 @@ jobs:
       - name: Build wheel (with bundled yt-dlp + ffmpeg)
         run: maturin build --release --out dist
         shell: bash
-        env:
-          # build.rs will auto-download yt-dlp + ffmpeg for the host platform
-          CARGO_FEATURE_BUNDLED: "1"
 
       - name: List wheel
         run: ls -lh dist/
@@ -77,10 +70,13 @@ jobs:
 
   # Build the standalone Rust TUI binary with bundled yt-dlp + ffmpeg.
   # No Python required — these are 100% self-contained executables.
+  #
+  # macOS x86_64 (Intel) is excluded — see note above. Intel Mac users
+  # should use the arm64 build via Rosetta 2, or build from source:
+  #   cargo build --release --no-default-features --features bundled --bin zoinks-tui
   rust-binaries:
     name: Binary · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.name == 'macos-x86_64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -89,11 +85,6 @@ jobs:
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact: zoinks-tui-x86_64-unknown-linux-gnu
-            ext: ""
-          - name: macos-x86_64
-            os: macos-13
-            target: x86_64-apple-darwin
-            artifact: zoinks-tui-x86_64-apple-darwin
             ext: ""
           - name: macos-arm64
             os: macos-14
@@ -160,6 +151,11 @@ jobs:
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install upx
+        run: |
+          curl -sL "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz" -o /tmp/upx.tar.xz
+          tar xf /tmp/upx.tar.xz -C /tmp
+          sudo cp /tmp/upx-4.2.4-amd64_linux/upx /usr/local/bin/
       - run: pip install maturin textual pytest ruff
       - run: maturin build --release --out dist
       - run: pip install --no-deps --force-reinstall dist/*.whl
@@ -230,9 +226,15 @@ jobs:
             | Platform | Wheel | Binary |
             |----------|-------|--------|
             | Linux x86_64 | ✓ | ✓ |
-            | macOS x86_64 (Intel) | ✓ | ✓ |
             | macOS arm64 (Apple Silicon) | ✓ | ✓ |
             | Windows x86_64 | ✓ | ✓ |
+
+            **Intel Mac users:** the macOS arm64 build works on Intel Macs via
+            Rosetta 2 (pre-installed on every Intel Mac). Alternatively, build
+            from source:
+            ```sh
+            cargo build --release --no-default-features --features bundled --bin zoinks-tui
+            ```
 
             ## Attribution
 
